@@ -336,7 +336,7 @@ The Go's battery is **not visible to software**, on stock or on our firmware:
 - bottle 0.13 refuses to re-assign attributes on Bottle app objects; the REST API does this for runtime state, so every network, firmware or reboot change returned HTTP 500. Fixed with a patch in `python3-bottle2`.
 - Tor transparent proxy: Tor now also listens on `10.153.147.1:9040` and the `tor_transparent` redirect targets it, instead of `172.31.1.1` on the carrier-less `br-tor` bridge.
 
-**Tor Wi-Fi enabled through the API** (`PUT /api/networks/lan_tor`): SSID `InvizBoxGo-Tor` (same key as `InvizBoxGo`), 10.153.147.0/24, DNS via Tor's DNSPort, all TCP via Tor's TransPort. Confirmed from a phone client (Tor shows the client's streams). Management (SSH, key-only) stays on `InvizBoxGo` / `lan_vpn1`, which has no internet until a VPN is configured.
+**Tor Wi-Fi enabled through the API** (`PUT /api/networks/lan_tor`): SSID `InvizBoxGo-Tor` (same key as `InvizBoxGo`), 10.153.147.0/24, DNS via Tor's DNSPort, all TCP via Tor's TransPort. Confirmed from a phone client (Tor shows the client's streams). Management (SSH, key-only) stays on `InvizBoxGo` / `lan_vpn1`, which reaches the internet only through the WireGuard VPN (see below).
 
 ## Open items (as of 2026-11-16)
 
@@ -348,3 +348,15 @@ The Go's battery is **not visible to software**, on stock or on our firmware:
 6. **Debug boot logger** still in the overlay used for builds; remove for release.
 7. **Run 2 image** (pcre2/zlib bumps, `compat_version`) is built and gated but not flashed; the Go runs run 1 plus live fixes (wifiwatch, bottle patch, lighttpd clock-jump, Tor TransPort). A run 3 build should carry all of these.
 8. Not ported: connmark inter-network forwarding, captive-portal scripts, per-instance dnsmasq restart.
+
+## WireGuard / Mullvad on the VPN network — 2026-11-16
+
+`wireguard-procd` (InvizBox's procd-managed WireGuard, device `tun1`, routing table 1 for `lan_vpn1`) now accepts provider configs in wg-quick format as downloaded: it strips the keys `wg setconf` rejects, takes the address from `Address=`, applies `MTU=` (default 1420), points the `vpn1` dnsmasq instance at the config's `DNS=` through the tunnel, and installs the table route as `dev tun1` (the original `via <own address>` route was rejected by the kernel). Feed commit `wireguard-procd: accept wg-quick provider configs`.
+
+Tested on the Go with a Mullvad WireGuard config (Salt Lake City): handshake; a client on `InvizBoxGo` reports `mullvad_exit_ip: true` at am.i.mullvad.net; DNS answered by Mullvad through the tunnel; with the tunnel stopped, client traffic fails instead of leaking to the uplink (fw4 only forwards `lan_vpn1` → `tunnels`).
+
+Setup (manual; the UI's provider/location flow depended on InvizBox's dead server lists):
+1. Generate a WireGuard config in your Mullvad account (Linux format) and copy one `.conf` to `/etc/wireguard/` on the Go, mode 600.
+2. `uci set wireguard.vpn_1.filename=/etc/wireguard/<file>.conf; uci set wireguard.vpn_1.enabled=1; uci commit wireguard; /etc/init.d/wireguard restart`
+3. Check: `wg show tun1` (recent handshake), then am.i.mullvad.net from a client on `InvizBoxGo`.
+To switch servers, point `filename` at another file and restart. `InvizBoxGo-Tor` is unaffected (Tor only).
