@@ -1,0 +1,4 @@
+chain invizbox_tor_output {
+	type nat hook output priority dstnat; policy accept;
+	ip daddr 10.192.0.0/16 tcp flags & (fin|syn|rst|ack) == syn counter dnat ip to 172.31.1.1:9040 comment "invizbox: router .onion traffic to Tor"
+}

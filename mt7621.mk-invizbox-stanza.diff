@@ -1,0 +1,23 @@
+# Image stanza to add to target/linux/ramips/image/mt7621.mk on an openwrt-24.10 tree.
+# Insert alphabetically — right before ioaccess_* or similar.
+#
+# Delta vs InvizBox 4.4.1:
+#  + $(Device/dsa-migration)           — required for any single-port mt7621 device on 22.03+
+#  - kmod-ata-ahci                     — AHCI not relevant on MT7621 (vestigial on the Go anyway)
+#  ~ DEVICE_MODEL cleaned up           — "Invizbox Go" -> "Go" (VENDOR is already "InvizBox")
+#  + SUPPORTED_DEVICES now carries both the 4.4.1 legacy alias AND the modern name,
+#    so sysupgrade from an existing 4.4.1-built image is accepted by this new target.
+
+define Device/invizbox_invizboxgo
+  $(Device/dsa-migration)
+  IMAGE_SIZE := 62976k
+  DEVICE_VENDOR := InvizBox
+  DEVICE_MODEL := Go
+  DEVICE_PACKAGES := kmod-mt7603 kmod-rtc-pcf8563 \
+      kmod-usb3 kmod-usb-storage \
+      kmod-usb-net kmod-usb-net-asix-ax88179 \
+      kmod-fs-ext4 kmod-fs-vfat kmod-fs-ntfs \
+      kmod-fs-hfs kmod-fs-hfsplus
+  SUPPORTED_DEVICES += invizboxgo invizbox_invizboxgo
+endef
+TARGET_DEVICES += invizbox_invizboxgo

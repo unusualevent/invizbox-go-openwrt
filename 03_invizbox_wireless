@@ -1,0 +1,50 @@
+#!/bin/sh
+# InvizBox Go has no Ethernet port: Wi-Fi is the only way in.
+# Stock 24.10 generates /etc/config/wireless with the radio disabled, so without this
+# the board boots unreachable.  Runs after `wifi config` (see /etc/init.d/boot).
+#
+# - AP SSID "InvizBoxGo" (same as the 4.4.1 factory default)
+# - PSK = the per-device 16 bytes at offset 65520 of the "factory" partition,
+#   the same value 4.4.1's 15_defaultpassword read from /dev/mtd2.
+#   Fails closed (radio stays off, logged) if it is unreadable: no open AP.
+# - LAN on 10.153.146.1/24 like 4.4.1, not 192.168.1.1 which collides with
+#   typical home subnets when a client joins.
+
+. /lib/functions.sh
+
+[ "$(board_name)" = "invizbox,invizboxgo" ] || exit 0
+[ -e /etc/config/wireless ] || exit 1
+# Only for the stock generated config; an InvizBox image ships its own wireless/network config.
+uci -q get wireless.default_radio0 >/dev/null || exit 0
+
+idx=$(find_mtd_index factory)
+[ -n "$idx" ] || { logger -t invizbox-wifi "factory partition not found"; exit 0; }
+
+psk=$(dd if="/dev/mtd$idx" bs=1 skip=65520 count=16 2>/dev/null)
+
+case "$psk" in
+	"" | *[!A-Za-z0-9._+=@%^*-]*)
+		logger -t invizbox-wifi "factory PSK unreadable/invalid; leaving Wi-Fi disabled"
+		exit 0
+		;;
+esac
+
+uci -q batch <<EOF
+set wireless.radio0.disabled='0'
+set wireless.default_radio0.ssid='InvizBoxGo'
+set wireless.default_radio0.encryption='psk2'
+set wireless.default_radio0.key='$psk'
+set network.lan.ipaddr='10.153.146.1'
+set network.lan.netmask='255.255.255.0'
+commit wireless
+commit network
+EOF
+
+# br-lan is generated with lan1..lan4, which this board does not have; let the
+# bridge come up empty so the Wi-Fi AP can join it.
+for s in $(uci -q show network | sed -n "s/^\(network\.[^.=]*\)\.name='br-lan'$/\1/p"); do
+	uci set "$s.bridge_empty=1"
+done
+uci commit network
+
+exit 0

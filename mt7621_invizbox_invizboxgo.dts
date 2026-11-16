@@ -1,0 +1,154 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+//
+// InvizBox Go — MT7621 single-radio travel router.
+// Port to OpenWrt 24.10 (kernel 6.6).
+//
+// Delta vs InvizBox 4.4.1 DTS (invizbox/openwrt @ b434a4a, kernel 5.4):
+//  - `mtd-mac-address = <&factory 0x022>` on gmac0        -> nvmem-cells (since 22.03)
+//  - `mediatek,mtd-eeprom = <&factory 0x0>` on mt76       -> nvmem-cells (since 22.03)
+//  - Mark u-boot and u-boot-env `read-only`               (modern safety; matches current mt7621 devices)
+//  - Add `label-mac-device = &gmac0` alias                (modern convention)
+//  - Add `debounce-interval = <60>` on reset key          (modern)
+//  - Factory partition gets a `compatible = "nvmem-cells"` wrapper
+//    so cells can be referenced by phandle
+//
+// Everything else is byte-compatible with the 4.4.1 DTS.  Memory, SD controller,
+// SPI partitions (sizes unchanged), PCIe bring-up, state_default pinctrl all stay.
+
+#include "mt7621.dtsi"
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+
+/ {
+	compatible = "invizbox,invizboxgo", "mediatek,mt7621-soc";
+	model = "InvizBox Go";
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x10000000>;
+	};
+
+	aliases {
+		led-boot = &led_wifi_green;
+		led-failsafe = &led_wifi_green;
+		led-running = &led_wifi_green;
+		led-upgrade = &led_wifi_green;
+		label-mac-device = &gmac0;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		red {
+			label = "red:wifi";
+			gpios = <&gpio 3 GPIO_ACTIVE_LOW>;
+		};
+
+		led_wifi_green: green {
+			label = "green:wifi";
+			gpios = <&gpio 4 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	keys {
+		compatible = "gpio-keys";
+
+		reset {
+			label = "reset";
+			gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
+			debounce-interval = <60>;
+			linux,code = <KEY_RESTART>;
+		};
+	};
+};
+
+&sdhci {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdhci_pins>;
+};
+
+&spi0 {
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+		m25p,fast-read;
+		broken-flash-reset;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "u-boot";
+				reg = <0x0 0x30000>;
+				read-only;
+			};
+
+			partition@30000 {
+				label = "u-boot-env";
+				reg = <0x30000 0x10000>;
+				read-only;
+			};
+
+			factory: partition@40000 {
+				compatible = "nvmem-cells";
+				label = "factory";
+				reg = <0x40000 0x10000>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				read-only;
+
+				eeprom_factory_0: eeprom@0 {
+					reg = <0x0 0x400>;
+				};
+
+				macaddr_factory_22: macaddr@22 {
+					reg = <0x22 0x6>;
+				};
+			};
+
+			partition@50000 {
+				compatible = "denx,uimage";
+				label = "firmware";
+				reg = <0x50000 0x2760000>;
+			};
+
+			partition@27b0000 {
+				label = "board_data";
+				reg = <0x27b0000 0x20000>;
+			};
+		};
+	};
+};
+
+&pcie {
+	status = "okay";
+};
+
+&pcie0 {
+	wifi@0,0 {
+		compatible = "mediatek,mt76";
+		reg = <0x0000 0 0 0 0>;
+		nvmem-cells = <&eeprom_factory_0>;
+		nvmem-cell-names = "eeprom";
+		ieee80211-freq-limit = <2400000 2500000>;
+	};
+};
+
+&gmac0 {
+	nvmem-cells = <&macaddr_factory_22>;
+	nvmem-cell-names = "mac-address";
+};
+
+&state_default {
+	gpio {
+		groups = "i2c", "rgmii1", "rgmii2", "uart2", "uart3";
+		function = "gpio";
+	};
+};

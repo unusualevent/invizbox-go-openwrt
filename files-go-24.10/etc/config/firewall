@@ -1,0 +1,108 @@
+# fw4 (nftables) port of the InvizBox Go 4.4.1 firewall + firewall.user.
+# Ported: per-network zones, VPN and uplink masquerade/forwarding, Tor
+# transparent proxy, DNS DNAT. NOT ported yet: the connmark scheme that let
+# devices on different hotspot networks reach each other (inter-network
+# forwarding is rejected by default).
+
+config defaults 'defaults'
+	option forward 'REJECT'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option syn_flood '1'
+
+config zone 'wan_zone'
+	option name 'wan'
+	option network 'wan'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+	option masq '1'
+	option mtu_fix '1'
+
+config zone 'tunnels_zone'
+	option name 'tunnels'
+	list network 'vpn_1'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+	option masq '1'
+	option mtu_fix '1'
+
+config zone 'vpn1_zone'
+	option name 'lan_vpn1'
+	option network 'lan_vpn1'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+config zone 'tor_zone'
+	option name 'lan_tor'
+	option network 'lan_tor'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+config zone 'clear1_zone'
+	option name 'lan_clear1'
+	option network 'lan_clear1'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+# replaces firewall.user: br-lan_vpn1 -> tun1 and br-lan_clear1 -> wlan0
+config forwarding 'vpn1_to_tunnels'
+	option src 'lan_vpn1'
+	option dest 'tunnels'
+
+config forwarding 'clear1_to_wan'
+	option src 'lan_clear1'
+	option dest 'wan'
+
+# We need to accept udp packets on port 68,
+# see https://dev.openwrt.org/ticket/4108
+config rule 'dhcp_renew'
+	option dest_port '68'
+	option family 'ipv4'
+	option name 'Allow-DHCP-Renew'
+	option proto 'udp'
+	option src 'wan'
+	option target 'ACCEPT'
+
+config redirect 'dns_vpn1'
+	option dest_ip '10.153.146.1'
+	option dest_port '53'
+	option src 'lan_vpn1'
+	option src_dport '53'
+	option target 'DNAT'
+
+config redirect 'dns_tor'
+	option dest_ip '10.153.147.1'
+	option dest_port '53'
+	option src 'lan_tor'
+	option src_dport '53'
+	option target 'DNAT'
+
+config redirect 'dns_clear1'
+	option dest_ip '10.153.148.1'
+	option dest_port '53'
+	option src 'lan_clear1'
+	option src_dport '53'
+	option target 'DNAT'
+
+# replaces firewall.user: tor hotspot TCP (not to the router) -> Tor TransPort
+config redirect 'tor_transparent'
+	option name 'Tor-TransPort'
+	option src 'lan_tor'
+	option proto 'tcp'
+	option src_dport '1-65535'
+	option src_dip '!10.153.144.0/21'
+	option dest_ip '172.31.1.1'
+	option dest_port '9040'
+	option target 'DNAT'
+
+# replaces firewall.user: router-originated traffic to Tor's virtual
+# address range (.onion lookups) -> Tor TransPort
+config include 'tor_output'
+	option type 'nftables'
+	option path '/etc/invizbox/tor-output.nft'
+	option position 'table-post'

@@ -1,0 +1,6 @@
+#!/bin/sh /etc/rc.common
+# DEBUG ONLY: see /usr/sbin/bootlog-usb.sh
+START=12
+start() {
+	/usr/sbin/bootlog-usb.sh </dev/null >/dev/null 2>&1 &
+}

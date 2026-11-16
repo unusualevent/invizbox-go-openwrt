@@ -1,0 +1,31 @@
+#!/bin/sh
+
+# Copyright 2019 InvizBox Ltd
+#
+# Licensed under the InvizBox Shared License;
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#        https://www.invizbox.com/lic/license.txt
+
+conn_number=${PLUTO_CONNECTION:4}
+dev="tun${conn_number}"
+
+mkdir -p /tmp/openvpn/${conn_number}/
+case "${PLUTO_VERB}" in
+    up-client)
+        ip tunnel add "${dev}" mode vti local "${PLUTO_ME}" remote "${PLUTO_PEER}" key "${PLUTO_MARK_OUT%%/*}"
+        ip link set "${dev}" up
+        ip addr add "${PLUTO_MY_SOURCEIP}" dev "${dev}"
+        ip route add default proto static via ${PLUTO_MY_SOURCEIP} dev ${dev} table ${conn_number}
+        sysctl -w "net.ipv4.conf.${dev}.disable_policy=1"
+        sysctl -w "net.ipv4.conf.${dev}.rp_filter=0"
+        ifconfig ${dev} mtu 1422 up
+        echo "up" > /tmp/openvpn/${conn_number}/status
+        ;;
+    down-client)
+        echo "down" > /tmp/openvpn/${conn_number}/status
+        ip route del default table ${conn_number}
+        ip tunnel del "${dev}"
+        ;;
+esac
