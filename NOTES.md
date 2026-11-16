@@ -343,7 +343,7 @@ The Go's battery is **not visible to software**, on stock or on our firmware:
 1. **wifiwatch: test the unexercised paths.** Take the upstream away (or move out of range), confirm the AP comes back within ~60–90 s, and the Go rejoins when the upstream returns. Watch for clients dropping during each 120 s scan.
 2. **UI network scan.** `rest-api/src/system/internet.py` still runs `iwinfo wlan0 scan`, which only works while the Go is connected upstream. Point it at the `scan0` helper (same approach as wifiwatch).
 3. **netwatch2** crash-loops (`require("update")` missing; captive check uses the dead `update.invizbox.com`). Needs a redesign around a self-hosted update server.
-4. **OpenVPN placeholder** config restarts every 5 s; ship `vpn_1` disabled until configured.
+4. ~~OpenVPN placeholder restarts every 5 s~~ — done 2026-11-16: `vpn_1` ships `enabled '0'` and the init script is disabled on the Go. The `openvpn-openssl` package stays installed because `invizboxutils` depends on it. The operator doesn't use OpenVPN; a future Mullvad setup would use WireGuard (Mullvad has been retiring OpenVPN).
 5. **`new_device.lua`** fails under 24.10+ dnsmasq (`dhcp-script.sh` runs it with the shell).
 6. **Debug boot logger** still in the overlay used for builds; remove for release.
 7. **Run 2 image** (pcre2/zlib bumps, `compat_version`) is built and gated but not flashed; the Go runs run 1 plus live fixes (wifiwatch, bottle patch, lighttpd clock-jump, Tor TransPort). A run 3 build should carry all of these.
