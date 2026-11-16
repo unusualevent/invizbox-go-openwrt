@@ -96,7 +96,7 @@ config redirect 'tor_transparent'
 	option proto 'tcp'
 	option src_dport '1-65535'
 	option src_dip '!10.153.144.0/21'
-	option dest_ip '172.31.1.1'
+	option dest_ip '10.153.147.1'
 	option dest_port '9040'
 	option target 'DNAT'
 

@@ -8,9 +8,9 @@ are stuck.
 
 Status (2026-11): "InvizBox-OpenWRT 5.0.0-dev" runs on real hardware: kernel
 6.12, OpenSSL 3.5, Python 3.13, fw4/nftables, Tor transparent proxy, admin UI over
-HTTP and HTTPS. Upstream Wi-Fi (AP+client on the single radio) works at the
-driver level, but the `wifiwatch` supervisor still needs a rewrite. See
-`NOTES.md` → "Known gaps".
+HTTP and HTTPS, upstream Wi-Fi (AP and client on the single radio, managed by a
+reworked `wifiwatch`), and an optional Tor-only Wi-Fi network. See `NOTES.md` →
+"Open items" for what is still untested or missing.
 
 ## Where the pieces live
 

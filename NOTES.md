@@ -279,7 +279,7 @@ One radio (MT7603): AP and client share `phy0` and must share a channel. Self-re
 
 What failed in the first (API-driven) attempt was **wifiwatch**: it saw the 5 s gap without a default route and switched `wan` back to `scan`; its reconnect logic depends on `iwinfo wlan0 scan`, which no longer exists, so it never reconnected.
 
-**wifiwatch rewrite (not started)**: tolerate drops (~60 s grace, let wpa_supplicant reconnect); after the grace switch to `scan` so the AP comes back; periodically re-enable the client for a short window to retry known networks (accepting a brief AP gap); no dependency on a scan interface.
+**wifiwatch rewrite — done 2026-11-16** (feed commit `wifiwatch: work with OpenWrt 24.10+ AP+STA`): 60 s grace on a lost uplink, then back to `scan` so the AP returns; known networks found through a short-lived `scan0` interface (experiment G) instead of `wlan0`; rescan every 120 s; failed networks retried after 10 min. Proven on hardware: the first connect (found the upstream, joined, AP followed to its channel, default route up). **Not yet exercised:** the grace period on a real drop, the fallback when the upstream disappears, and reconnecting after it returns.
 
 Other bugs found in the logs: `new_device.lua` fails under 24.10/25.12 dnsmasq (`dhcp-script.sh` runs it with the shell: `syntax error: unexpected "("`); OpenVPN restarts every 5 s on the placeholder config (should ship `enabled '0'`); the overlay `system` config lacked `compat_version '1.1'` (fixed in the overlay; makes keep-settings upgrades between our images possible).
 
@@ -324,3 +324,27 @@ The Go's battery is **not visible to software**, on stock or on our firmware:
 - Claimed GPIOs are only the two Wi-Fi LEDs (3, 4) and reset (18).
 - The vendor admin UI's only battery reference is help text telling the user to look at the **battery indicator LEDs** on the case — charge state is handled entirely by the charger hardware.
 - Not ruled out: a charger "charging/full" status line on an unclaimed GPIO. Finding it needs a sweep reading all unclaimed GPIO inputs while the charger is plugged in vs unplugged (operator action). Even then it would give charging/not-charging, not capacity or health; cell health can only be judged by runtime or by measuring the cell.
+
+## Run 2 (25.12) and Tor Wi-Fi — 2026-11-16
+
+**Run 2 image** (built, gated 19/19, not flashed): pcre2 10.48 and zlib 1.3.2 (refreshed ARM patch 004, dropped obsolete 005, `.pc` path moved to `lib/pkgconfig`), `compat_version '1.1'` in the overlay. CVE count with the corrected matcher: **381** (run 1: 389; 24.10: 858; 4.4.1: 5,995). Userspace is down to 11 matches, none real-and-fixable: BusyBox ×2 (no fixed release), Lua 5.1 ×2, util-linux ×1, mbedTLS ×1 (LLVM-only), Python/OpenSSL/Tor ×5 (NVD mis-attributions). `cve-count.py` now re-checks each match against NVD's own version ranges: NVD's `virtualMatchString` treats the CPE update field as a wildcard, so a final release (pcre2 10.48) also matched entries for its release candidates (`10.48:rc1`).
+
+**Upstream Wi-Fi (live on the Go, in the feed):** wifiwatch scans through a short-lived `scan0` interface with a locally administered MAC (the AP keeps running), waits 60 s before acting on a lost uplink, rescans every 120 s when there is no uplink, and retries failed networks after 10 minutes. Note `sysupgrade -n` wipes `known_networks`; re-add the upstream after flashing.
+
+**Fixes found while enabling Tor Wi-Fi:**
+- lighttpd stops for good when the first NTP sync jumps the clock (the Go has no working RTC); `etc/lighttpd/conf.d/05-no-clock-jump-restart.conf` disables that restart.
+- bottle 0.13 refuses to re-assign attributes on Bottle app objects; the REST API does this for runtime state, so every network, firmware or reboot change returned HTTP 500. Fixed with a patch in `python3-bottle2`.
+- Tor transparent proxy: Tor now also listens on `10.153.147.1:9040` and the `tor_transparent` redirect targets it, instead of `172.31.1.1` on the carrier-less `br-tor` bridge.
+
+**Tor Wi-Fi enabled through the API** (`PUT /api/networks/lan_tor`): SSID `InvizBoxGo-Tor` (same key as `InvizBoxGo`), 10.153.147.0/24, DNS via Tor's DNSPort, all TCP via Tor's TransPort. Confirmed from a phone client (Tor shows the client's streams). Management (SSH, key-only) stays on `InvizBoxGo` / `lan_vpn1`, which has no internet until a VPN is configured.
+
+## Open items (as of 2026-11-16)
+
+1. **wifiwatch: test the unexercised paths.** Take the upstream away (or move out of range), confirm the AP comes back within ~60–90 s, and the Go rejoins when the upstream returns. Watch for clients dropping during each 120 s scan.
+2. **UI network scan.** `rest-api/src/system/internet.py` still runs `iwinfo wlan0 scan`, which only works while the Go is connected upstream. Point it at the `scan0` helper (same approach as wifiwatch).
+3. **netwatch2** crash-loops (`require("update")` missing; captive check uses the dead `update.invizbox.com`). Needs a redesign around a self-hosted update server.
+4. **OpenVPN placeholder** config restarts every 5 s; ship `vpn_1` disabled until configured.
+5. **`new_device.lua`** fails under 24.10+ dnsmasq (`dhcp-script.sh` runs it with the shell).
+6. **Debug boot logger** still in the overlay used for builds; remove for release.
+7. **Run 2 image** (pcre2/zlib bumps, `compat_version`) is built and gated but not flashed; the Go runs run 1 plus live fixes (wifiwatch, bottle patch, lighttpd clock-jump, Tor TransPort). A run 3 build should carry all of these.
+8. Not ported: connmark inter-network forwarding, captive-portal scripts, per-instance dnsmasq restart.

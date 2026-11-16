@@ -3,6 +3,7 @@ DataDirectory /var/lib/tor
 User tor
 VirtualAddrNetworkIPv4 10.192.0.0/16
 TransPort 172.31.1.1:9040
+TransPort 10.153.147.1:9040
 DNSPort 172.31.1.1:9053
 AutomapHostsOnResolve 1
 ControlPort 9051
