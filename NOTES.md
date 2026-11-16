@@ -360,3 +360,9 @@ Setup (manual; the UI's provider/location flow depended on InvizBox's dead serve
 2. `uci set wireguard.vpn_1.filename=/etc/wireguard/<file>.conf; uci set wireguard.vpn_1.enabled=1; uci commit wireguard; /etc/init.d/wireguard restart`
 3. Check: `wg show tun1` (recent handshake), then am.i.mullvad.net from a client on `InvizBoxGo`.
 To switch servers, point `filename` at another file and restart. `InvizBoxGo-Tor` is unaffected (Tor only).
+
+## DNS leak check — 2026-11-16
+
+mullvad.net/en/check from a laptop on `InvizBoxGo` first showed Cloudflare and Google resolvers. The cause was not the Go: the laptop's Tailscale received global nameservers (1.1.1.1, 8.8.8.8) from the tailnet's control server with "override local DNS", and sent all lookups there as DoH, inside the Mullvad tunnel but to a non-Mullvad resolver. Fixed on the control-server side (`override_local_dns: false`); the check now shows no leaks.
+
+Router-side hardening for `lan_vpn1` (overlay `dhcp` and `firewall`): `use-application-dns.net` answers NXDOMAIN, which turns off Firefox's automatic DoH, and DNS-over-TLS (853) is rejected. Plain DNS (53) from clients was already redirected to the network's dnsmasq, which only asks the VPN's resolver through the tunnel.

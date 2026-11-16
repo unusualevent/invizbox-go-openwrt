@@ -45,6 +45,8 @@ config dnsmasq 'vpn1'
 	list server '208.67.222.222@tun1'
 	list server '208.67.220.220@tun1'
 	option serversfile '/etc/dns_blacklist/lan_vpn1.overall'
+	# Firefox canary: disables its automatic DNS-over-HTTPS so lookups use this resolver (Mullvad via the tunnel)
+	list address '/use-application-dns.net/'
 
 config dnsmasq 'tor'
 	option authoritative '1'
